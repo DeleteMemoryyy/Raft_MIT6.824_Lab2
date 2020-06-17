@@ -18,6 +18,8 @@ package raft
 //
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -153,31 +155,36 @@ func (rf *Raft) resetElectionTimer() {
 // save Raft's persistent state to stable storage,
 // where it can later be retrieved after a crash and restart.
 // see paper's Figure 2 for a description of what should be persistent.
+// This function need to be protected by mutex lock
 //
 func (rf *Raft) persist() {
 	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := gob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	DPrintf("%v persists its data", rf)
+	w := new(bytes.Buffer)
+	e := gob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.log)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
 // restore previously persisted state.
 //
 func (rf *Raft) readPersist(data []byte) {
-	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := gob.NewDecoder(r)
-	// d.Decode(&rf.xxx)
-	// d.Decode(&rf.yyy)
 	if data == nil || len(data) < 1 { // bootstrap without any state?
 		return
 	}
+
+	DPrintf("%v reads data from persist", rf)
+
+	// Your code here (2C).
+	r := bytes.NewBuffer(data)
+	d := gob.NewDecoder(r)
+	d.Decode(&rf.currentTerm)
+	d.Decode(&rf.votedFor)
+	d.Decode(&rf.log)
 }
 
 //
@@ -212,6 +219,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.lock("Raft.RequestVote()")
 	defer rf.unlock("Raft.RequestVote()")
+	defer rf.persist()
 
 	// invalid candidate
 	if args.Term < rf.currentTerm ||
@@ -312,6 +320,7 @@ type AppendEntriesReply struct {
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.lock("Raft.AppendEntries()")
 	defer rf.unlock("Raft.AppendEntries()")
+	defer rf.persist()
 
 	if args.Term < rf.currentTerm {
 		DPrintf("%v refuses appending entries request from (%v) for out of date", rf, args.LeaderId)
@@ -397,6 +406,7 @@ func (rf *Raft) routine() {
 //
 func (rf *Raft) launchElection() {
 	DPrintf("%v launches an election", rf)
+	defer rf.persist()
 
 	rf.currentTerm++
 	rf.votedFor = rf.me
@@ -434,6 +444,7 @@ func (rf *Raft) launchElection() {
 			if !reply.VoteGranted && reply.Term > rf.currentTerm {
 				DPrintf("%v stops electing and goes back to [%v]", rf, stateName[Follower])
 				rf.convertToFollower(reply.Term)
+				rf.persist()
 				rf.resetElectionTimer()
 			}
 
@@ -509,6 +520,7 @@ func (rf *Raft) heartbeat() {
 			if reply.Term > rf.currentTerm {
 				DPrintf("%v knows a better leader has been elected and goes back to [%v]", rf, stateName[Follower])
 				rf.convertToFollower(reply.Term)
+				rf.persist()
 				rf.resetElectionTimer()
 				return
 			}

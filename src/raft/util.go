@@ -13,14 +13,6 @@ const Debug = 1
 func DPrintf(format string, a ...interface{}) (n int, err error) {
 	if Debug > 0 {
 		log.Printf(format, a...)
-		//fmt.Printf(format+"\n", a...)
-	}
-	return
-}
-
-func DPrint(a ...interface{}) (n int, err error) {
-	if Debug > 0 {
-		log.Print(a...)
 	}
 	return
 }
