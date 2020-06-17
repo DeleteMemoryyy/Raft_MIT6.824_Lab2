@@ -155,6 +155,7 @@ func (cfg *config) start1(i int) {
 			if m.UseSnapshot {
 				// ignore the snapshot
 			} else if v, ok := (m.Command).(int); ok {
+				DPrintf("Client(%v) get a command <%v @%v>", i, m.Command, m.Index)
 				cfg.mu.Lock()
 				for j := 0; j < len(cfg.logs); j++ {
 					if old, oldok := cfg.logs[j][m.Index]; oldok && old != v {
@@ -389,6 +390,7 @@ func (cfg *config) wait(index int, n int, startTerm int) interface{} {
 func (cfg *config) one(cmd int, expectedServers int) int {
 	t0 := time.Now()
 	starts := 0
+	DPrintf("Client send command <%v>", cmd)
 	for time.Since(t0).Seconds() < 10 {
 		// try all the servers, maybe one is the leader.
 		index := -1
@@ -403,6 +405,7 @@ func (cfg *config) one(cmd int, expectedServers int) int {
 			if rf != nil {
 				index1, _, ok := rf.Start(cmd)
 				if ok {
+					DPrintf("Client get an index for command <%v @%v>", cmd, index1)
 					index = index1
 					break
 				}
@@ -413,10 +416,16 @@ func (cfg *config) one(cmd int, expectedServers int) int {
 			// somebody claimed to be the leader and to have
 			// submitted our command; wait a while for agreement.
 			t1 := time.Now()
+			lastNd := 0
 			for time.Since(t1).Seconds() < 2 {
 				nd, cmd1 := cfg.nCommitted(index)
+				if nd != lastNd {
+					lastNd = nd
+					DPrintf("Client get a committed command <%v @%v> in %v server", cmd1, index, nd)
+				}
 				if nd > 0 && nd >= expectedServers {
 					// committed
+					DPrintf("Client get a committed command <%v @%v>, which command should be <%v>", cmd1, index, cmd)
 					if cmd2, ok := cmd1.(int); ok && cmd2 == cmd {
 						// and it was the command we submitted.
 						return index
