@@ -80,6 +80,8 @@ func make_config(t *testing.T, n int, unreliable bool) *config {
 
 // shut down a Raft server but save its persistent state.
 func (cfg *config) crash1(i int) {
+	DPrintf("Client crashes (%v) and disconnects it first", i)
+
 	cfg.disconnect(i)
 	cfg.net.DeleteServer(i) // disable client connections to the server.
 
@@ -117,6 +119,7 @@ func (cfg *config) crash1(i int) {
 // this server. since we cannot really kill it.
 //
 func (cfg *config) start1(i int) {
+	DPrintf("Client starts (%v) and crash it first", i)
 	cfg.crash1(i)
 
 	// a fresh set of outgoing ClientEnd names.
@@ -155,7 +158,7 @@ func (cfg *config) start1(i int) {
 			if m.UseSnapshot {
 				// ignore the snapshot
 			} else if v, ok := (m.Command).(int); ok {
-				DPrintf("Client(%v) get a command <%v @%v>", i, m.Command, m.Index)
+				DPrintf("Server(%v) get a command <%v @%v>", i, m.Command, m.Index)
 				cfg.mu.Lock()
 				for j := 0; j < len(cfg.logs); j++ {
 					if old, oldok := cfg.logs[j][m.Index]; oldok && old != v {
@@ -207,7 +210,8 @@ func (cfg *config) cleanup() {
 
 // attach server i to the net.
 func (cfg *config) connect(i int) {
-	// fmt.Printf("connect(%d)\n", i)
+	//fmt.Printf("connect(%d)\n", i)
+	DPrintf("Client connects to (%v)", i)
 
 	cfg.connected[i] = true
 
@@ -230,6 +234,7 @@ func (cfg *config) connect(i int) {
 
 // detach server i from the net.
 func (cfg *config) disconnect(i int) {
+	DPrintf("Client disconnects (%v)", i)
 	// fmt.Printf("disconnect(%d)\n", i)
 
 	cfg.connected[i] = false
@@ -405,7 +410,7 @@ func (cfg *config) one(cmd int, expectedServers int) int {
 			if rf != nil {
 				index1, _, ok := rf.Start(cmd)
 				if ok {
-					DPrintf("Client get an index for command <%v @%v>", cmd, index1)
+					DPrintf("Server(%v) get an index after Start for command <%v @%v>", starts, cmd, index1)
 					index = index1
 					break
 				}
@@ -425,7 +430,7 @@ func (cfg *config) one(cmd int, expectedServers int) int {
 				}
 				if nd > 0 && nd >= expectedServers {
 					// committed
-					DPrintf("Client get a committed command <%v @%v>, which command should be <%v>", cmd1, index, cmd)
+					DPrintf("Client get a committed command <%v @%v> in %v server, which command should be <%v>", cmd1, index, nd, cmd)
 					if cmd2, ok := cmd1.(int); ok && cmd2 == cmd {
 						// and it was the command we submitted.
 						return index

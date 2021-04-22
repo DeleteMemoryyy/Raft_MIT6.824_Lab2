@@ -625,6 +625,35 @@ func TestPersist32C(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 }
 
+func TestUnreliableAgree2C(t *testing.T) {
+	servers := 5
+	cfg := make_config(t, servers, true)
+	defer cfg.cleanup()
+
+	fmt.Printf("Test (2C): unreliable agreement ...\n")
+
+	var wg sync.WaitGroup
+
+	for iters := 1; iters < 50; iters++ {
+		for j := 0; j < 4; j++ {
+			wg.Add(1)
+			go func(iters, j int) {
+				defer wg.Done()
+				cfg.one((100*iters)+j, 1)
+			}(iters, j)
+		}
+		cfg.one(iters, 1)
+	}
+
+	cfg.setunreliable(false)
+
+	wg.Wait()
+
+	cfg.one(100, servers)
+
+	fmt.Printf("  ... Passed\n")
+}
+
 //
 // Test the scenarios described in Figure 8 of the extended Raft paper. Each
 // iteration asks a leader, if there is one, to insert a command in the Raft
@@ -691,35 +720,6 @@ func TestFigure82C(t *testing.T) {
 	fmt.Printf("  ... Passed\n")
 }
 
-func TestUnreliableAgree2C(t *testing.T) {
-	servers := 5
-	cfg := make_config(t, servers, true)
-	defer cfg.cleanup()
-
-	fmt.Printf("Test (2C): unreliable agreement ...\n")
-
-	var wg sync.WaitGroup
-
-	for iters := 1; iters < 50; iters++ {
-		for j := 0; j < 4; j++ {
-			wg.Add(1)
-			go func(iters, j int) {
-				defer wg.Done()
-				cfg.one((100*iters)+j, 1)
-			}(iters, j)
-		}
-		cfg.one(iters, 1)
-	}
-
-	cfg.setunreliable(false)
-
-	wg.Wait()
-
-	cfg.one(100, servers)
-
-	fmt.Printf("  ... Passed\n")
-}
-
 func TestFigure8Unreliable2C(t *testing.T) {
 	servers := 5
 	cfg := make_config(t, servers, true)
@@ -769,6 +769,8 @@ func TestFigure8Unreliable2C(t *testing.T) {
 			cfg.connect(i)
 		}
 	}
+
+	time.Sleep(time.Duration(2000) * time.Millisecond)
 
 	cfg.one(rand.Int()%10000, servers)
 
